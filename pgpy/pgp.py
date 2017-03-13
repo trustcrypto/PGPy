@@ -2218,7 +2218,7 @@ class PGPKey(Armorable, ParentRef, PGPObject):
         if not message.is_encrypted:
             warnings.warn("This message is not encrypted", stacklevel=2)
             return message
-
+        """
         if self.fingerprint.keyid not in message.issuers:
             sks = set(self.subkeys)
             mis = set(message.issuers)
@@ -2230,8 +2230,9 @@ class PGPKey(Armorable, ParentRef, PGPObject):
                 return self.subkeys[skid].decrypt(message)
 
             raise PGPError("Cannot decrypt the provided message with this key")
+        """
+        pkesk = next(pk for pk in message._sessionkeys)
 
-        pkesk = next(pk for pk in message._sessionkeys if pk.pkalg == self.key_algorithm and pk.encrypter == self.fingerprint.keyid)
         alg, key = pkesk.decrypt_sk(self._key)
 
         # now that we have the symmetric cipher used and the key, we can decrypt the actual message

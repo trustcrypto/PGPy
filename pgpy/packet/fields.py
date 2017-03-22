@@ -1152,8 +1152,18 @@ class RSAPriv(PrivKey, RSAPub):
             del kb
 
     def sign(self, sigdata, hash_alg):
+        print 'hash_alg= ', repr(hash_alg)
+        print
+        print 'signdata= ', repr(signdata)
+        print
         signer = self.__privkey__().signer(padding.PKCS1v15(), hash_alg)
+        print 'signdata= ', repr(signdata)
+        print
         signer.update(sigdata)
+        print 'signdata= ', repr(signdata)
+        print
+        print 'signer.finalize()= ', repr(signer.finalize())
+        print
         return signer.finalize()
 
 
@@ -1209,10 +1219,19 @@ class DSAPriv(PrivKey, DSAPub):
             del kb
 
     def sign(self, sigdata, hash_alg):
+        print 'hash_alg= ', repr(hash_alg)
+        print
+        print 'signdata= ', repr(signdata)
+        print
         signer = self.__privkey__().signer(hash_alg)
+        print 'signdata= ', repr(signdata)
+        print
         signer.update(sigdata)
+        print 'signdata= ', repr(signdata)
+        print
+        print 'signer.finalize()= ', repr(signer.finalize())
+        print
         return signer.finalize()
-
 
 class ElGPriv(PrivKey, ElGPub):
     __privfields__ = ('x', )

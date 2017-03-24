@@ -16,11 +16,16 @@ import warnings
 import weakref
 
 import six
+import time
+import hashlib
 
 from datetime import datetime
 
+from onlykey import OnlyKey, Message
+
 from cryptography.hazmat.primitives import hashes
 
+from .constants import ok
 from .constants import CompressionAlgorithm
 from .constants import Features
 from .constants import HashAlgorithm
@@ -1714,6 +1719,7 @@ class PGPKey(Armorable, ParentRef, PGPObject):
         :param sig: The :py:obj:`PGPSignature` object the new signature is to be encapsulated within
         :returns: ``sig``, after the signature is added to it.
         """
+
         user = prefs.pop('user', None)
         uid = None
         if user is not None:
@@ -1765,20 +1771,162 @@ class PGPKey(Armorable, ParentRef, PGPObject):
         # handle an edge case for timestamp signatures vs standalone signatures
         if sig.type == SignatureType.Timestamp and len(sig._signature.subpackets._hashed_sp) > 1:
             sig._signature.sigtype = SignatureType.Standalone
-
         sigdata = sig.hashdata(subject)
         h2 = sig.hash_algorithm.hasher
         h2.update(sigdata)
         sig._signature.hash2 = bytearray(h2.digest()[:2])
+        SignatureHash = h2.digest()
 
         _sig = self._key.sign(sigdata, getattr(hashes, sig.hash_algorithm.name)())
         if _sig is NotImplemented:
             raise NotImplementedError(self.key_algorithm)
 
+
+        #print 'Initialize OnlyKey client...'
+        #ok = OnlyKey()
+        #print 'Done'
+        #print
+        #global slot
+        #oksig = ok.sign(SignatureHash)
+
         sig._signature.signature.from_signer(_sig)
         sig._signature.update_hlen()
-
+        #print 'Raw Signature'
+        #print oksig
+        #print
+        #print 'Encoded Signature'
+        #print sig
         return sig
+
+    def _sign2(self, subject, sig, **prefs):
+        """
+        The actual signing magic happens here.
+        :param subject: The subject to sign
+        :param sig: The :py:obj:`PGPSignature` object the new signature is to be encapsulated within
+        :returns: ``sig``, after the signature is added to it.
+        """
+
+        user = prefs.pop('user', None)
+        uid = None
+        if user is not None:
+            uid = self.get_uid(user)
+
+        else:
+            uid = next(iter(self.userids), None)
+            if uid is None and self.parent is not None:
+                uid = next(iter(self.parent.userids), None)
+
+        if sig.hash_algorithm is None:
+            sig._signature.halg = uid.selfsig.hashprefs[0]
+
+        if uid is not None and sig.hash_algorithm not in uid.selfsig.hashprefs:
+            warnings.warn("Selected hash algorithm not in key preferences", stacklevel=4)
+
+        # signature options that can be applied at any level
+        expires = prefs.pop('expires', None)
+        notation = prefs.pop('notation', None)
+        revocable = prefs.pop('revocable', True)
+        policy_uri = prefs.pop('policy_uri', None)
+
+        if expires is not None:
+            # expires should be a timedelta, so if it's a datetime, turn it into a timedelta
+            if isinstance(expires, datetime):
+                expires = expires - self.created
+
+            sig._signature.subpackets.addnew('SignatureExpirationTime', hashed=True, expires=expires)
+
+        if revocable is False:
+            sig._signature.subpackets.addnew('Revocable', hashed=True, bflag=revocable)
+
+        if notation is not None:
+            for name, value in notation.items():
+                # mark all notations as human readable unless value is a bytearray
+                flags = NotationDataFlags.HumanReadable
+                if isinstance(value, bytearray):
+                    flags = 0x00
+
+                sig._signature.subpackets.addnew('NotationData', hashed=True, flags=flags, name=name, value=value)
+
+        if policy_uri is not None:
+            sig._signature.subpackets.addnew('Policy', hashed=True, uri=policy_uri)
+
+        if user is not None and uid is not None:
+            signers_uid = "{:s}".format(uid)
+            sig._signature.subpackets.addnew('SignersUserID', hashed=True, userid=signers_uid)
+
+        # handle an edge case for timestamp signatures vs standalone signatures
+        if sig.type == SignatureType.Timestamp and len(sig._signature.subpackets._hashed_sp) > 1:
+            sig._signature.sigtype = SignatureType.Standalone
+        sigdata = sig.hashdata(subject)
+        h2 = sig.hash_algorithm.hasher
+        h2.update(sigdata)
+        print h2
+        sig._signature.hash2 = bytearray(h2.digest()[:2])
+        SignatureHash = h2.digest()
+
+        _sig = self._key.sign(sigdata, getattr(hashes, sig.hash_algorithm.name)())
+        if _sig is NotImplemented:
+            raise NotImplementedError(self.key_algorithm)
+
+
+        #print 'Initialize OnlyKey client...'
+        #ok = OnlyKey()
+        #print 'Done'
+        #print
+        global slot
+        oksig = ok.sign(SignatureHash)
+
+        sig._signature.signature.from_signer(oksig)
+        sig._signature.update_hlen()
+        #print 'Raw Signature'
+        #print oksig
+        #print
+        #print 'Encoded Signature'
+        #print sig
+        return sig
+
+    @KeyAction(KeyFlags.Sign, is_unlocked=True, is_public=False)
+    def sign2(self, subject, **prefs):
+        """
+        Sign text, a message, or a timestamp using this key.
+
+        :param subject: The text to be signed
+        :type subject: ``str``, :py:obj:`~pgpy.PGPMessage`, ``None``
+        :raises: :py:exc:`~pgpy.errors.PGPError` if the key is passphrase-protected and has not been unlocked
+        :raises: :py:exc:`~pgpy.errors.PGPError` if the key is public
+        :returns: :py:obj:`PGPSignature`
+
+        The following optional keyword arguments can be used with :py:meth:`PGPKey.sign`, as well as
+        :py:meth:`PGPKey.certify`,  :py:meth:`PGPKey.revoke`, and :py:meth:`PGPKey.bind`:
+
+        :keyword expires: Set an expiration date for this signature
+        :type expires: :py:obj:`~datetime.datetime`, :py:obj:`~datetime.timedelta`
+        :keyword notation: Add arbitrary notation data to this signature.
+        :type notation: ``dict``
+        :keyword policy_uri: Add a URI to the signature that should describe the policy under which the signature
+                             was issued.
+        :type policy_uri: ``str``
+        :keyword revocable: If ``False``, this signature will be marked non-revocable
+        :type revocable: ``bool``
+        :keyword user: Specify which User ID to use when creating this signature. Also adds a "Signer's User ID"
+                       to the signature.
+        :type user: ``str``
+        """
+        sig_type = SignatureType.BinaryDocument
+        hash_algo = prefs.pop('hash', None)
+
+        if subject is None:
+            sig_type = SignatureType.Timestamp
+
+        if isinstance(subject, PGPMessage):
+            if subject.type == 'cleartext':
+                sig_type = SignatureType.CanonicalDocument
+
+            subject = subject.message
+        print 'ID', repr(self.fingerprint.keyid)
+        sig = PGPSignature.new(sig_type, self.key_algorithm, hash_algo, self.fingerprint.keyid)
+
+        return self._sign2(subject, sig, **prefs)
 
     @KeyAction(KeyFlags.Sign, is_unlocked=True, is_public=False)
     def sign(self, subject, **prefs):
@@ -1818,7 +1966,7 @@ class PGPKey(Armorable, ParentRef, PGPObject):
                 sig_type = SignatureType.CanonicalDocument
 
             subject = subject.message
-
+        print 'ID', repr(self.fingerprint.keyid)
         sig = PGPSignature.new(sig_type, self.key_algorithm, hash_algo, self.fingerprint.keyid)
 
         return self._sign(subject, sig, **prefs)

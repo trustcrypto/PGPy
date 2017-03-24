@@ -36,6 +36,7 @@ from .types import Public
 from .types import Sub
 from .types import VersionedPacket
 
+from ..constants import ok
 from ..constants import CompressionAlgorithm
 from ..constants import HashAlgorithm
 from ..constants import PubKeyAlgorithm
@@ -210,9 +211,6 @@ class PKESessionKeyV3(PKESessionKey):
         return sk
 
     def decrypt_sk(self, pk):
-        print 'Enter slot number to use for decryption, 1 - 4 for RSA, 1 - 32 for ECC'
-        print
-        slot = int(raw_input())
         if self.pkalg == PubKeyAlgorithm.RSAEncryptOrSign:
             # pad up ct with null bytes if necessary
             ct = self.ct.me_mod_n.to_mpibytes()[2:]
@@ -237,52 +235,12 @@ class PKESessionKeyV3(PKESessionKey):
 
         #print 'm= ', repr(m)
         #print
-        print 'Initialize OnlyKey client...'
-        ok = OnlyKey()
-        print 'Done'
-        print
-
-        time.sleep(2)
-
-        ok.read_string(timeout_ms=100)
-        empty = 'a'
-        while not empty:
-            empty = ok.read_string(timeout_ms=100)
-
-        time.sleep(1)
-        print 'You should see your OnlyKey blink 3 times'
-        print
-
-        # Compute the challenge pin
-        h = hashlib.sha256()
-        h.update(ct)
-        d = h.digest()
-
-        assert len(d) == 32
-
-        def get_button(byte):
-            ibyte = ord(byte)
-            if ibyte < 6:
-                return 1
-            return ibyte % 5 + 1
-
-        b1, b2, b3 = get_button(d[0]), get_button(d[15]), get_button(d[31])
-
-        print 'Sending the payload to the OnlyKey...'
-        ok.send_large_message2(msg=Message.OKDECRYPT, payload=ct, slot_id=slot)
-
-        print 'Please enter the 3 digit challenge code on OnlyKey (and press ENTER if necessary)'
-        print '{} {} {}'.format(b1, b2, b3)
-        raw_input()
-        print 'Trying to read the decrypted data from OnlyKey'
-        print 'For RSA with 4096 keysize this may take up to 9 seconds...'
-        ok_decrypted = ''
-        while ok_decrypted == '':
-            time.sleep(0.5)
-            ok_decrypted = ok.read_bytes(64, to_str=True)
-
-        print 'Decrypted by OnlyKey, data=', repr(ok_decrypted)
-        m = bytearray(ok_decrypted)
+        #print 'Initialize OnlyKey client...'
+        #ok = OnlyKey()
+        #print 'Done'
+        #print
+        global slot
+        m = bytearray(ok.decrypt(ct))
         print 'm, data=', repr(m)
 
 

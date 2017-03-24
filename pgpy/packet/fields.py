@@ -1170,18 +1170,16 @@ class RSAPriv(PrivKey, RSAPub):
             del kb
 
     def sign(self, sigdata, hash_alg):
-        print 'hash_alg= ', repr(hash_alg)
-        print
-        print 'signdata= ', repr(signdata)
-        print
+        #print 'hash_alg= ', repr(hash_alg)
+        #print
         signer = self.__privkey__().signer(padding.PKCS1v15(), hash_alg)
-        print 'signdata= ', repr(signdata)
-        print
+        #print 'signer= ', repr(signer)
+        #print 'signer= ', signer
+        #print
         signer.update(sigdata)
-        print 'signdata= ', repr(signdata)
-        print
-        print 'signer.finalize()= ', repr(signer.finalize())
-        print
+        #print 'signdata= ', repr(sigdata)
+        #print 'signdata= ', binascii.hexlify(sigdata)
+        #print
         return signer.finalize()
 
 

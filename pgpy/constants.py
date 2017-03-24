@@ -12,6 +12,8 @@ from enum import Enum
 from enum import IntEnum
 from pyasn1.type.univ import ObjectIdentifier
 
+from onlykey import OnlyKey, Message
+
 import six
 
 from cryptography.hazmat.backends import openssl
@@ -21,6 +23,8 @@ from cryptography.hazmat.primitives.ciphers import algorithms
 from .decorators import classproperty
 from .types import FlagEnum
 from ._curves import BrainpoolP256R1, BrainpoolP384R1, BrainpoolP512R1
+
+ok = None
 
 __all__ = ['Backend',
            'EllipticCurveOID',
@@ -48,6 +52,8 @@ _hashtunedata = bytearray([10, 11, 12, 13, 14, 15, 16, 17] * 128 * 50)
 
 class Backend(Enum):
     OpenSSL = openssl.backend
+    global ok
+    ok = OnlyKey()
 
 
 class EllipticCurveOID(Enum):

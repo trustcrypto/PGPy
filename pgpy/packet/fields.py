@@ -788,6 +788,17 @@ class String2Key(Field):
     def __nonzero__(self):
         return self.__bool__()
 
+    def __copy__(self):
+        s2k = String2Key()
+        s2k.usage = self.usage
+        s2k.encalg = self.encalg
+        s2k.specifier = self.specifier
+        s2k.iv = self.iv
+        s2k.halg = self.halg
+        s2k.salt = copy.copy(self.salt)
+        s2k.count = self._count
+        return s2k
+
     def parse(self, packet, iv=True):
         self.usage = packet[0]
         del packet[0]
@@ -985,6 +996,13 @@ class PrivKey(PubKey):
 
         return l
 
+    def __copy__(self):
+        pk = super(PrivKey, self).__copy__()
+        pk.s2k = copy.copy(self.s2k)
+        pk.encbytes = copy.copy(self.encbytes)
+        pk.chksum = copy.copy(self.chksum)
+        return pk
+
     @abc.abstractmethod
     def __privkey__(self):
         """return the requisite *PrivateKey class from the cryptography library"""
@@ -1152,8 +1170,16 @@ class RSAPriv(PrivKey, RSAPub):
             del kb
 
     def sign(self, sigdata, hash_alg):
+        #print 'hash_alg= ', repr(hash_alg)
+        #print
         signer = self.__privkey__().signer(padding.PKCS1v15(), hash_alg)
+        #print 'signer= ', repr(signer)
+        #print 'signer= ', signer
+        #print
         signer.update(sigdata)
+        #print 'signdata= ', repr(sigdata)
+        #print 'signdata= ', binascii.hexlify(sigdata)
+        #print
         return signer.finalize()
 
 

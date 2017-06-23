@@ -5,10 +5,13 @@ import binascii
 import calendar
 import copy
 import hashlib
+import time
 import os
 import re
 
 from datetime import datetime
+
+from onlykey import OnlyKey, Message
 
 import six
 
@@ -33,6 +36,7 @@ from .types import Public
 from .types import Sub
 from .types import VersionedPacket
 
+from ..constants import ok
 from ..constants import CompressionAlgorithm
 from ..constants import HashAlgorithm
 from ..constants import PubKeyAlgorithm
@@ -210,10 +214,15 @@ class PKESessionKeyV3(PKESessionKey):
         if self.pkalg == PubKeyAlgorithm.RSAEncryptOrSign:
             # pad up ct with null bytes if necessary
             ct = self.ct.me_mod_n.to_mpibytes()[2:]
-            ct = b'\x00' * ((pk.keymaterial.__privkey__().key_size // 8) - len(ct)) + ct
+            #print 'Session Key without pad = ', repr(ct)
+            #ct2 = ct
+            #ct = b'\x00' * ((pk.keymaterial.__privkey__().key_size // 8) - len(ct)) + ct
+            #print 'Session Key with pad = ', repr(ct)
 
-            decrypter = pk.keymaterial.__privkey__().decrypt
-            decargs = (ct, padding.PKCS1v15(),)
+            #decrypter = pk.keymaterial.__privkey__().decrypt
+            #print 'decrypter  = ', repr(decrypter)
+            #decargs = (ct, padding.PKCS1v15(),)
+            #print 'decargs= ', repr(decargs)
 
         elif self.pkalg == PubKeyAlgorithm.ECDH:
             decrypter = pk
@@ -222,7 +231,18 @@ class PKESessionKeyV3(PKESessionKey):
         else:
             raise NotImplementedError(self.pkalg)
 
-        m = bytearray(self.ct.decrypt(decrypter, *decargs))
+        #m = bytearray(self.ct.decrypt(decrypter, *decargs))
+
+        #print 'm= ', repr(m)
+        #print
+        #print 'Initialize OnlyKey client...'
+        #ok = OnlyKey()
+        #print 'Done'
+        #print
+        global slot
+        m = bytearray(ok.decrypt(ct))
+        print 'm, data=', repr(m)
+
 
         """
         The value "m" in the above formulas is derived from the session key
@@ -556,7 +576,7 @@ class SKESessionKeyV4(SKESessionKey):
 
         # if there is no ciphertext, then the first session key is the session key being used
         if len(self.ct) == 0:
-            return sk
+            return self.symalg, sk
 
         # otherwise, we now need to decrypt the encrypted session key
         m = bytearray(_decrypt(bytes(self.ct), sk, self.symalg))
@@ -565,7 +585,7 @@ class SKESessionKeyV4(SKESessionKey):
         symalg = SymmetricKeyAlgorithm(m[0])
         del m[0]
 
-        return (symalg, bytes(m))
+        return symalg, bytes(m)
 
     def encrypt_sk(self, passphrase, sk):
         # generate the salt and derive the key to encrypt sk with from it
@@ -867,7 +887,7 @@ class PrivKeyV4(PrivKey, PubKeyV4):
 
     def pubkey(self):
         # return a copy of ourselves, but just the public half
-        pk = PubKeyV4()
+        pk = PubKeyV4() if not isinstance(self, PrivSubKeyV4) else PubSubKeyV4()
         pk.created = self.created
         pk.pkalg = self.pkalg
 
